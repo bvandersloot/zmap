@@ -353,58 +353,56 @@ int send_run(sock_t st, shard_t *s)
 		}
 
 		// Actually send a packet.
-		for (int i = 0; i < zconf.packet_streams; i++) {
-			count++;
-			uint32_t src_ip = get_src_ip(current_ip, i);
-			uint32_t validation[VALIDATE_BYTES / sizeof(uint32_t)];
-			validate_gen(src_ip, current_ip, (uint8_t *)validation);
-			size_t length = zconf.probe_module->packet_length;
-			zconf.probe_module->make_packet(buf, &length, src_ip,
-							current_ip, validation,
-							i, probe_data);
-			if (length > MAX_PACKET_SIZE) {
-				log_fatal(
-				    "send",
-				    "send thread %hhu set length (%zu) larger than MAX (%zu)",
-				    s->thread_id, length, MAX_PACKET_SIZE);
-			}
-			if (zconf.dryrun) {
-				lock_file(stdout);
-				zconf.probe_module->print_packet(stdout, buf);
-				unlock_file(stdout);
-			} else {
-				void *contents = buf;
-				int any_sends_successful = 0;
-				for (int i = 0; i < attempts; ++i) {
-					int rc = send_packet(st, contents,
-							     length, idx);
-					if (rc < 0) {
-						struct in_addr addr;
-						addr.s_addr = current_ip;
-						char addr_str_buf
-						    [INET_ADDRSTRLEN];
-						const char *addr_str =
-						    inet_ntop(AF_INET, &addr,
-							      addr_str_buf,
-							      INET_ADDRSTRLEN);
-						if (addr_str != NULL) {
-							log_debug(
-							    "send",
-							    "send_packet failed for %s. %s",
-							    addr_str,
-							    strerror(errno));
-						}
-					} else {
-						any_sends_successful = 1;
-						break;
+		count++;
+		uint32_t src_ip = get_src_ip(current_ip, 0);
+		uint32_t validation[VALIDATE_BYTES / sizeof(uint32_t)];
+		validate_gen(src_ip, current_ip, (uint8_t *)validation);
+		size_t length = zconf.probe_module->packet_length;
+		zconf.probe_module->make_packet(buf, &length, src_ip,
+						current_ip, validation,
+						s->state.probes_sent, probe_data);
+		if (length > MAX_PACKET_SIZE) {
+			log_fatal(
+				"send",
+				"send thread %hhu set length (%zu) larger than MAX (%zu)",
+				s->thread_id, length, MAX_PACKET_SIZE);
+		}
+		if (zconf.dryrun) {
+			lock_file(stdout);
+			zconf.probe_module->print_packet(stdout, buf);
+			unlock_file(stdout);
+		} else {
+			void *contents = buf;
+			int any_sends_successful = 0;
+			for (int i = 0; i < attempts; ++i) {
+				int rc = send_packet(st, contents,
+							 length, idx);
+				if (rc < 0) {
+					struct in_addr addr;
+					addr.s_addr = current_ip;
+					char addr_str_buf
+						[INET_ADDRSTRLEN];
+					const char *addr_str =
+						inet_ntop(AF_INET, &addr,
+							  addr_str_buf,
+							  INET_ADDRSTRLEN);
+					if (addr_str != NULL) {
+						log_debug(
+							"send",
+							"send_packet failed for %s. %s",
+							addr_str,
+							strerror(errno));
 					}
+				} else {
+					any_sends_successful = 1;
+					break;
 				}
-				if (!any_sends_successful) {
-					s->state.failures++;
-				}
-				idx++;
-				idx &= 0xFF;
 			}
+			if (!any_sends_successful) {
+				s->state.failures++;
+			}
+			idx++;
+			idx &= 0xFF;
 		}
 		// Track the number of hosts we actually scanned.
 		s->state.sent++;

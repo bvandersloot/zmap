@@ -26,6 +26,7 @@ typedef struct shard {
 		uint32_t failures;
 		uint32_t first_scanned;
 		uint32_t max_targets;
+		int32_t probes_sent;
 	} state;
 	struct shard_params {
 		uint64_t first;
