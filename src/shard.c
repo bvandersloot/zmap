@@ -147,8 +147,14 @@ uint32_t shard_get_next_ip(shard_t *shard)
 	while (1) {
 		uint32_t candidate = shard_get_next_elem(shard);
 		if (candidate == shard->params.last) {
-			shard->current = ZMAP_SHARD_DONE;
-			return ZMAP_SHARD_DONE;
+			if (shard->state.probes_sent >= zconf.packet_streams - 1) {
+				shard->current = ZMAP_SHARD_DONE;
+				return ZMAP_SHARD_DONE;
+			} else {
+				shard->state.probes_sent++;
+				shard->current = shard->params.first;
+				candidate = shard->current;
+			}
 		}
 		if (candidate - 1 < zsend.max_index) {
 			shard->state.whitelisted++;
