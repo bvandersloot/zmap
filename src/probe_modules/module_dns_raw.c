@@ -598,34 +598,53 @@ static int dns_global_initialize(struct state_conf *conf)
 
 	if (conf->probe_args) { // no parameters passed in. Use defaults
 		int arg_strlen = strlen(conf->probe_args);
+		char *initial = conf->probe_args;
 		char *arg_pos = conf->probe_args;
 
+		if (arg_strlen > 0 && ':' == arg_pos[0]) {
+			FILE* infile = fopen(arg_pos+1, "r");	
+			if(infile == NULL)
+    			return 1;
+			fseek(infile, 0L, SEEK_END);
+			int numbytes = ftell(infile);
+			fseek(infile, 0L, SEEK_SET);
+			char* buffer = (char*)calloc(numbytes, sizeof(char));
+			if(buffer == NULL)
+    			return 1;
+			fread(buffer, sizeof(char), numbytes, infile);
+			fclose(infile);
+			arg_pos = buffer;
+			initial = buffer;
+			arg_strlen = numbytes;
+			log_warn("dns", arg_pos);
+		}
+
 		for (int i = 0; i < num_questions; i++) {
-			if (arg_pos >= (conf->probe_args + arg_strlen)) {
+			if (arg_pos >= (initial + arg_strlen)) {
 				log_fatal(
-				    "dns",
-				    "More probes than questions configured. Add additional questions.");
+					"dns",
+					"More probes than questions configured. Add additional questions.");
 			}
 
 			char *probe_q_delimiter_p = strchr(arg_pos, ',');
 			char *probe_arg_delimiter_p = strchr(arg_pos, ';');
 
 			if (probe_q_delimiter_p == NULL ||
-			    probe_q_delimiter_p == arg_pos ||
-			    arg_pos + strlen(arg_pos) ==
+				probe_q_delimiter_p == arg_pos ||
+				arg_pos + strlen(arg_pos) ==
 				(probe_q_delimiter_p + 1) ||
-			    (probe_arg_delimiter_p == NULL &&
-			     (i + 1) != num_questions)) {
+				(probe_arg_delimiter_p == NULL &&
+				 (i + 1) != num_questions)) {
 				log_fatal(
-				    "dns",
-				    "Invalid probe args. Format: \"A,google.com\" or \"A,google.com;A,example.com\"");
+					"dns",
+					"Invalid probe args. Format: \"A,google.com\" or \"A,google.com;A,example.com\"");
 			}
 
 			int domain_len = 0;
 
 			if (probe_arg_delimiter_p) {
 				domain_len = probe_arg_delimiter_p -
-					     probe_q_delimiter_p - 1;
+						 probe_q_delimiter_p - 1;
 			} else {
 				domain_len = strlen(probe_q_delimiter_p);
 			}
@@ -652,7 +671,7 @@ static int dns_global_initialize(struct state_conf *conf)
 			arg_pos = probe_q_delimiter_p + domain_len + 2;
 		}
 
-		if (arg_pos != conf->probe_args + arg_strlen + 2) {
+		if (arg_pos != initial + arg_strlen + 2) {
 			log_fatal(
 			    "dns",
 			    "More args than probes passed. Add additional probes.");
